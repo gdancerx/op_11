@@ -34,10 +34,17 @@ CONFIG_NAME = 'log_analyzer.cfg'
 
 
 def exception_handler(exc_type, value, tb):
+    """
+    Default exception handler for logging uncaught exceptions.
+    """
     logging.error('Uncaught exception:', exc_info=(exc_type, value, tb))
 
 
 def read_config_file(config_file, config):
+    """
+    Function reads a configuration file config_file and builds new
+    configuration merging config_file and current configuration config.
+    """
     new_config = config.copy()
     if os.path.exists(config_file):
         with open(config_file) as cf:
@@ -63,6 +70,10 @@ def read_config_file(config_file, config):
 
 
 def set_logging(config):
+    """
+    Function configures logging to a log file based on current configuration
+    config.
+    """
     f = config.get('LOG_FILE')
     logging.basicConfig(level=logging.INFO,
                         format='[%(asctime)s] %(levelname).1s %(message)s',
@@ -70,6 +81,9 @@ def set_logging(config):
 
 
 def find_last_log(config):
+    """
+    Function returns last nginx log file from directory 'LOG_DIR'.
+    """
     try:
         logging.info("Checking log directory " + config['LOG_DIR'])
         files = os.listdir(config['LOG_DIR'])
@@ -81,6 +95,9 @@ def find_last_log(config):
 
 
 def get_last_filename(files):
+    """
+    Function returns latest log file name and it's datetime from files.
+    """
     dfiles = []
     last_file = ('', datetime.datetime(1900, 1, 1, 0, 0, 0))
 
@@ -98,6 +115,9 @@ def get_last_filename(files):
 
 
 def open_log_file(log_name):
+    """
+    Function opens log file log_name and returns file object log_file.
+    """
     try:
         if log_name[-3:].lower() == '.gz':
             log_file = gzip.open(log_name, 'rt')
@@ -110,13 +130,15 @@ def open_log_file(log_name):
 
 
 def process_log_file(log_name):
-
+    """
+    Function processes log file log_name and returns raw report data dictonary
+    report_data and statistic information dictionary stat_data.
+    """
     report_data = {}
     stat_data = {'sum_requests_number': 0,
                  'sum_requests_time': Decimal(0),
                  'parsing_errors': 0,
                  'total_requests': 0}
-
     log_file = open_log_file(log_name)
     if log_file is None:
         return None, None
@@ -124,8 +146,11 @@ def process_log_file(log_name):
     try:
         for line in log_file:
             url, requesttime = process_log_line(line)
-            report_data, stat_data = process_line_data(stat_data, url, report_data, requesttime)
-
+            url_data, stat_data = process_line_data(stat_data, url,
+                                                    report_data,
+                                                    requesttime)
+            if url_data is not None:
+                report_data[url] = url_data
     except OSError:
         logging.exception('Error reading file ' + log_name + '!')
         return None, None
@@ -135,20 +160,28 @@ def process_log_file(log_name):
 
 
 def process_line_data(stat_data, url, report_data, requesttime):
+    """
+    Function processes data from one log line and returns updated dictionaries
+    updated_data and local_stat_data.
+    """
     local_stat_data = stat_data.copy()
-    local_report_data = report_data.copy()
     local_stat_data['total_requests'] = local_stat_data['total_requests'] + 1
     if url is not None:
-        updated_data = analyze_log_line(local_report_data, url, requesttime)
-        local_report_data[url] = updated_data
+        updated_data = analyze_log_line(report_data, url, requesttime)
+        # local_report_data[url] = updated_data
         local_stat_data['sum_requests_number'] = local_stat_data['sum_requests_number'] + 1
         local_stat_data['sum_requests_time'] = local_stat_data['sum_requests_time'] + Decimal(requesttime)
     else:
         local_stat_data['parsing_errors'] = local_stat_data['parsing_errors'] + 1
-    return local_report_data, local_stat_data
+        updated_data = None
+    return updated_data, local_stat_data
 
 
 def process_log_line(line):
+    """
+    Function parses one line of log file and returns url and request time or
+    None,None in case of parsing error.
+    """
     regex = r'(?P<ipaddress>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) (?P<ruser>.+) (?P<xrip>.+) \[(?P<dateandtime>\d{2}\/[a-z]{3}\/\d{4}:\d{2}:\d{2}:\d{2} (\+|\-)\d{4})\] ((\"(GET|POST|HEAD|PUT) )(?P<url>.+)(http\/1\..\")) (?P<statuscode>\d{3}) (?P<bytessent>\d+) ([\"](?P<referer>(\-)|(.+))[\"]) ([\"](?P<useragent>.+)[\"]) ([\"](?P<f1>.+)[\"]) ([\"](?P<f2>.+)[\"]) ([\"](?P<f3>.+)[\"]) (?P<requesttime>\d+.\d+)'
     line_parsed = re.match(regex, line, re.I)
     if line_parsed:
@@ -158,6 +191,9 @@ def process_log_line(line):
 
 
 def analyze_log_line(report_data, url, requesttime):
+    """
+    Function analyzes log line data and returns updated data for url url_data.
+    """
     url_data = report_data.get(url)
     if url_data is not None:
         url_data['count'] = url_data['count'] + 1
@@ -171,25 +207,35 @@ def analyze_log_line(report_data, url, requesttime):
                     'count_perc': 0,
                     'time_perc': Decimal(0),
                     'time_avg': Decimal(0),
-                    'time_med': calc_median(requesttime, Decimal(requesttime), 1, Decimal(0))
+                    'time_med': calc_median(requesttime, Decimal(requesttime),
+                                            1, Decimal(0))
                     }
 
     return url_data
 
 
 def calc_median(requesttime, time_sum, count, time_med):
+    """
+    Function calculates median.
+    """
     delta = time_sum / count / count
     median = time_med - delta if Decimal(requesttime) < time_med else time_med + delta
     return median
 
 
 def summarize_data(report_data, stat_data):
+    """
+    Function calculates and returns summary information for report data.
+    """
     sum_data = {url: summarize_url(url_data, stat_data) for (url, url_data)
                 in report_data.items()}
     return sum_data
 
 
 def summarize_url(url_data, stat_data):
+    """
+    Function calculates summary information for specific url.
+    """
     data = url_data.copy()
     data['count_perc'] = url_data['count'] / stat_data['sum_requests_number'] * 100
     data['time_perc'] = url_data['time_sum'] / stat_data['sum_requests_time'] * 100
@@ -198,6 +244,9 @@ def summarize_url(url_data, stat_data):
 
 
 def construct_list(url, data):
+    """
+    Helper functions for rounding values and list construction.
+    """
     temp_dict = {}
     temp_dict['url'] = url
     temp_dict['count'] = data['count']
@@ -211,11 +260,17 @@ def construct_list(url, data):
 
 
 def get_top_n_urls(sum_data, n):
+    """
+    Fuction returns top n url data based on 'time_sum' field.
+    """
     top_n_urls = heapq.nlargest(int(n), sum_data, key=lambda url: sum_data[url]['time_sum'])
     return [construct_list(url, sum_data[url]) for url in top_n_urls]
 
 
 def generate_report(data, log_date, config):
+    """
+    Function generates report file in REPORT_DIR using TEMPLATE.
+    """
     try:
         with open(config['TEMPLATE']) as html_template:
             logging.info('Using template ' + config['TEMPLATE'])
@@ -227,12 +282,15 @@ def generate_report(data, log_date, config):
                     logging.info('Generating report ' + report_name)
                     report.write(report_html)
             except OSError:
-                logging.exception('Error writing file ' + report + '!')
+                logging.exception('Error writing file ' + report_name + '!')
     except OSError:
-        logging.exception('Error reading file ' + html_template + '!')
+        logging.exception('Error reading file ' + config['TEMPLATE'] + '!')
 
 
 def put_timestamp(timestamp_dir):
+    """
+    Function puts timestamp file in timestamp_dir.
+    """
     ts_file = os.path.join(timestamp_dir, 'log_analyzer.ts')
     try:
         with open(ts_file, 'wt') as ts:
@@ -242,12 +300,18 @@ def put_timestamp(timestamp_dir):
 
 
 def check_if_report_exists(report_dir, log_date):
+    """
+    Function checks if report file in report_dir exists.
+    """
     logging.info("Checking report directory " + report_dir)
     report_name = os.path.join(report_dir, 'report-' + log_date.strftime('%Y.%m.%d') + '.html')
     return os.path.exists(report_name)
 
 
 def calc_errors_perc(num_errors, total_requests):
+    """
+    Function calculates parsing errors percent of total_requests.
+    """
     return round(num_errors / total_requests * 100, 2)
 
 
