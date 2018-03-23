@@ -15,7 +15,6 @@ log_analyzer.py is a command-line utility for nginx log processing and statistic
 ```
 where variables are:
 |Variable | Description|
-
 |---------|------------|
 |REPORT_SIZE | a number of urls in report|
 |REPORT_DIR | a directory for report output|
