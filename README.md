@@ -3,7 +3,7 @@ log_analyzer.py is a command-line utility for nginx log processing and statistic
 
 *Requirements:* Python 3.x
 
-### Usage: log_analyzer.py --config __config file name__
+### Usage: log_analyzer.py [-h] --config __config file name__
 
 ### Example: python log_analyzer.py --config log_analyzer.cfg
 ### Run tests: python -m unittest tests/test_log_analyzer.py
