@@ -350,3 +350,9 @@ class Log_Analyzer_Test(unittest.TestCase):
 
     def test_calc_errors_perc_calculations(self):
         self.assertEqual(log_analyzer.calc_errors_perc(20, 34233), 0.06)
+
+    def test_parse_args_if_None(self):
+        self.assertEqual(log_analyzer.CONFIG_NAME, log_analyzer.parse_args([]))
+
+    def test_parse_args_if_config_is_not_empty(self):
+        self.assertEqual("xxx", log_analyzer.parse_args(["--config", "xxx"]))
