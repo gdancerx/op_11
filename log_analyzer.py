@@ -19,6 +19,7 @@ import heapq
 from string import Template
 import pprint
 import time
+import argparse
 
 config = {
     "REPORT_SIZE": 10,
@@ -104,9 +105,9 @@ def get_last_filename(files):
     if files:
         dfiles = [(file, datetime.datetime.strptime(file[20:28], '%Y%m%d'))
                   for file in files if file.startswith('nginx-access-ui.log-')]
-        for file in dfiles:
-            if file[1] > last_file[1]:
-                last_file = file
+        for file, date in dfiles:
+            if date > last_file[1]:
+                last_file = (file, date)
     else:
         logging.info('Log directory ' + config['LOG_DIR'] + ' is empty.')
         return None, None
@@ -119,7 +120,7 @@ def open_log_file(log_name):
     Function opens log file log_name and returns file object log_file.
     """
     try:
-        if log_name[-3:].lower() == '.gz':
+        if log_name.lower().endswith('.gz'):
             log_file = gzip.open(log_name, 'rt')
         else:
             log_file = open(log_name, 'rt')
@@ -315,13 +316,21 @@ def calc_errors_perc(num_errors, total_requests):
     return round(num_errors / total_requests * 100, 2)
 
 
+def parse_args(args):
+    """
+    Function parses command-line arguments
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", help="Configuration file name")
+    return parser.parse_args(args).config if parser.parse_args(args).config is not None else CONFIG_NAME
+
+
 def main():
 
     sys.excepthook = exception_handler
     working_config = config.copy()
 
-    config_name = sys.argv[2] if len(sys.argv) > 2 and sys.argv[1].lower() == '--config' else CONFIG_NAME
-    working_config = read_config_file(config_name, working_config)
+    working_config = read_config_file(parse_args(sys.argv[1:]), working_config)
     if working_config is None:
         sys.exit(1)
 
@@ -358,6 +367,7 @@ def main():
         logging.info('Report file exists. Nothing to process.')
 
     logging.info('Finished processing...')
+
 
 if __name__ == "__main__":
     main()
